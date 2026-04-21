@@ -257,32 +257,7 @@ class Query {
 		}
 
 
-		// Escape $param2 for safe inclusion in the SQL WHERE clause.
-		//
-		// Array  -> IN (...) list with each element prepared individually.
-		// Null   -> bare `null`.
-		// Bare `col` or `table.col` identifier -> pass through raw so internal
-		//           callers can reference joined columns.
-		// Everything else -> `$wpdb->prepare()`. The previous heuristic skipped
-		//           prepare() whenever the value contained a `.` or the WP
-		//           table prefix substring, which allowed unescaped user input
-		//           to reach the generated SQL.
-		if ( is_array( $param2 ) ) {
-			$prepared = array_map(
-				function ( $value ) use ( $wpdb ) {
-					return $wpdb->prepare( is_numeric( $value ) ? '%d' : '%s', $value );
-				},
-				$param2
-			);
-			$param2 = '(' . implode( ',', $prepared ) . ')';
-		} elseif ( null === $param2 ) {
-			$param2 = 'null';
-		} elseif ( is_string( $param2 ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $param2 ) ) {
-			// Safe bare column or table-qualified column reference.
-			$param2 = $param2;
-		} else {
-			$param2 = $wpdb->prepare( is_numeric( $param2 ) ? '%d' : '%s', $param2 );
-		}
+		$param2 = $this->prepare_value_expression( $param2 );
 
 		$this->where[] = [
 			'joint'     => $joint,
@@ -524,25 +499,7 @@ class Query {
 			$operator = '=';
 		}
 
-		// Mirror the WHERE-clause escaping rules for join references: allow
-		// bare `col` / `table.col` identifiers through raw, prepare everything
-		// else. The previous dot/prefix substring check allowed unescaped user
-		// input to reach the generated SQL.
-		if ( is_array( $referenceKey ) ) {
-			$prepared = array_map(
-				function ( $value ) use ( $wpdb ) {
-					return $wpdb->prepare( is_numeric( $value ) ? '%d' : '%s', $value );
-				},
-				$referenceKey
-			);
-			$referenceKey = '(' . implode( ',', $prepared ) . ')';
-		} elseif ( null === $referenceKey ) {
-			$referenceKey = 'null';
-		} elseif ( is_string( $referenceKey ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $referenceKey ) ) {
-			$referenceKey = $referenceKey;
-		} else {
-			$referenceKey = $wpdb->prepare( is_numeric( $referenceKey ) ? '%d' : '%s', $referenceKey );
-		}
+		$referenceKey = $this->prepare_value_expression( $referenceKey );
 
 		$join['on'][] = [
 			'joint'     => $joint,
@@ -1418,6 +1375,43 @@ class Query {
 		}
 
 		return $callback && is_callable( $callback ) ? call_user_func_array( $callback, [ $value ] ) : $value;
+	}
+
+	/**
+	 * Escape a WHERE/JOIN value for safe inclusion in the generated SQL.
+	 *
+	 * Array  -> `IN (...)` list with each element prepared individually.
+	 * Null   -> bare `null`.
+	 * Bare `table.col` identifier reference -> raw passthrough.
+	 * Everything else -> `$wpdb->prepare()`.
+	 *
+	 * @param mixed $value Value to escape.
+	 *
+	 * @return string
+	 */
+	private function prepare_value_expression( $value ) {
+		global $wpdb;
+
+		if ( is_array( $value ) ) {
+			$prepared = array_map(
+				function ( $item ) use ( $wpdb ) {
+					return $wpdb->prepare( is_numeric( $item ) ? '%d' : '%s', $item );
+				},
+				$value
+			);
+			return '(' . implode( ',', $prepared ) . ')';
+		}
+
+		if ( null === $value ) {
+			return 'null';
+		}
+
+		// Safe bare column or table-qualified column reference.
+		if ( is_string( $value ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $value ) ) {
+			return $value;
+		}
+
+		return $wpdb->prepare( is_numeric( $value ) ? '%d' : '%s', $value );
 	}
 
 	/**
