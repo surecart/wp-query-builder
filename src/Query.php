@@ -277,7 +277,7 @@ class Query {
 			$param2 = '(' . implode( ',', $prepared ) . ')';
 		} elseif ( null === $param2 ) {
 			$param2 = 'null';
-		} elseif ( is_string( $param2 ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $param2 ) ) {
+		} elseif ( is_string( $param2 ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $param2 ) ) {
 			// Safe bare column or table-qualified column reference.
 			$param2 = $param2;
 		} else {
@@ -538,7 +538,7 @@ class Query {
 			$referenceKey = '(' . implode( ',', $prepared ) . ')';
 		} elseif ( null === $referenceKey ) {
 			$referenceKey = 'null';
-		} elseif ( is_string( $referenceKey ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $referenceKey ) ) {
+		} elseif ( is_string( $referenceKey ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $referenceKey ) ) {
 			$referenceKey = $referenceKey;
 		} else {
 			$referenceKey = $wpdb->prepare( is_numeric( $referenceKey ) ? '%d' : '%s', $referenceKey );
