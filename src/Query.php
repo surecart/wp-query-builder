@@ -257,16 +257,32 @@ class Query {
 		}
 
 
-		//first check if is array if so then make a string out of array
-		//if not array but null then set value as null
-		//if not null does it contains . it could be column so dont parse as string
-		//If not column then use wpdb prepare
-		//if contains $prefix
-		$contain_join = preg_replace( '/^(\s?AND ?|\s?OR ?)|\s$/i', '', $param2 ?? '' );
-		$param2 = is_array( $param2 ) ? ( '("' . implode( '","', $param2 ) . '")' ) : ( $param2 === null
-			? 'null'
-			: ( strpos( $param2, '.' ) !== false || strpos( $param2, $wpdb->prefix ) !== false ? $param2 : $wpdb->prepare( is_numeric( $param2 ) ? '%d' : '%s', $param2 ) )
-		);
+		// Escape $param2 for safe inclusion in the SQL WHERE clause.
+		//
+		// Array  -> IN (...) list with each element prepared individually.
+		// Null   -> bare `null`.
+		// Bare `col` or `table.col` identifier -> pass through raw so internal
+		//           callers can reference joined columns.
+		// Everything else -> `$wpdb->prepare()`. The previous heuristic skipped
+		//           prepare() whenever the value contained a `.` or the WP
+		//           table prefix substring, which allowed unescaped user input
+		//           to reach the generated SQL.
+		if ( is_array( $param2 ) ) {
+			$prepared = array_map(
+				function ( $value ) use ( $wpdb ) {
+					return $wpdb->prepare( is_numeric( $value ) ? '%d' : '%s', $value );
+				},
+				$param2
+			);
+			$param2 = '(' . implode( ',', $prepared ) . ')';
+		} elseif ( null === $param2 ) {
+			$param2 = 'null';
+		} elseif ( is_string( $param2 ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $param2 ) ) {
+			// Safe bare column or table-qualified column reference.
+			$param2 = $param2;
+		} else {
+			$param2 = $wpdb->prepare( is_numeric( $param2 ) ? '%d' : '%s', $param2 );
+		}
 
 		$this->where[] = [
 			'joint'     => $joint,
@@ -508,11 +524,25 @@ class Query {
 			$operator = '=';
 		}
 
-		$referenceKey = is_array( $referenceKey ) ? ( '(\'' . implode( '\',\'', $referenceKey ) . '\')' )
-			: ( $referenceKey === null
-				? 'null'
-				: ( strpos( $referenceKey, '.' ) !== false || strpos( $referenceKey, $wpdb->prefix ) !== false ? $referenceKey : $wpdb->prepare( is_numeric( $referenceKey ) ? '%d' : '%s', $referenceKey ) )
+		// Mirror the WHERE-clause escaping rules for join references: allow
+		// bare `col` / `table.col` identifiers through raw, prepare everything
+		// else. The previous dot/prefix substring check allowed unescaped user
+		// input to reach the generated SQL.
+		if ( is_array( $referenceKey ) ) {
+			$prepared = array_map(
+				function ( $value ) use ( $wpdb ) {
+					return $wpdb->prepare( is_numeric( $value ) ? '%d' : '%s', $value );
+				},
+				$referenceKey
 			);
+			$referenceKey = '(' . implode( ',', $prepared ) . ')';
+		} elseif ( null === $referenceKey ) {
+			$referenceKey = 'null';
+		} elseif ( is_string( $referenceKey ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/', $referenceKey ) ) {
+			$referenceKey = $referenceKey;
+		} else {
+			$referenceKey = $wpdb->prepare( is_numeric( $referenceKey ) ? '%d' : '%s', $referenceKey );
+		}
 
 		$join['on'][] = [
 			'joint'     => $joint,
