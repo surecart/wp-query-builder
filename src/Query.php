@@ -1406,7 +1406,9 @@ class Query {
 			return 'null';
 		}
 
-		// Safe bare column or table-qualified column reference.
+		// Safe table-qualified column reference (e.g., 'users.id', 'posts.post_title').
+		// Only allows valid SQL identifier format: table.column where both parts start
+		// with letter/underscore and contain only letters, numbers, underscores.
 		if ( is_string( $value ) && preg_match( '/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/', $value ) ) {
 			return $value;
 		}

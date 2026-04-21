@@ -4,3 +4,6 @@
 # Generated
 /tests/.tmp
 composer.lock
+
+# Claude Code
+.claude/
